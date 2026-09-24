@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chat HP</title>
-<!-- Library Messaging Real-time Gratis -->
-<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--tx:#1b1d21;--mut:#6b7280;--pri:#16a34a;--me:#dcfce7;--bd:#e5e7eb}
 @media (prefers-color-scheme:dark){:root{--bg:#111316;--card:#1b1e23;--tx:#eceef1;--mut:#9aa1ac;--me:#14532d;--bd:#2a2e35}}
@@ -78,6 +77,8 @@ function lsGet(k){try{var v=localStorage.getItem(k);return v===null?(mem[k]||nul
 function lsSet(k,v){mem[k]=v;try{localStorage.setItem(k,v)}catch(e){}}
 function $(i){return document.getElementById(i)}
 function digits(s){return String(s||'').replace(/\D/g,'')}
+function toPeer(d){return 'chathp-'+digits(d)}
+function toDisp(p){return 'HP-'+p.replace('chathp-','')}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 
 var myId=lsGet('hp_id');
@@ -85,47 +86,81 @@ if(!myId){myId='HP-'+Math.floor(100000+Math.random()*900000);lsSet('hp_id',myId)
 var contacts=JSON.parse(lsGet('hp_contacts')||'[]');
 var chats=JSON.parse(lsGet('hp_chats')||'{}');
 var unread=JSON.parse(lsGet('hp_unread')||'{}');
-var current=null, pubnub=null;
+var conns={}, peer=null, current=null;
 
 function save(){lsSet('hp_contacts',JSON.stringify(contacts));lsSet('hp_chats',JSON.stringify(chats));lsSet('hp_unread',JSON.stringify(unread))}
 function setStatus(t){$('status').textContent=t}
+function isOnline(d){var c=conns[toPeer(d)];return !!(c&&c.open)}
 function addContact(d){if(contacts.indexOf(d)<0){contacts.push(d);save()}}
 
-function startApp(){
+function startPeer(){
   $('myid').textContent=myId;
+  if(typeof Peer==='undefined'){setStatus('Gagal memuat PeerJS. Cek koneksi internet.');return}
   
-  // Menggunakan server publik gratis
-  pubnub = new PubNub({
-    publishKey: 'pub-c-8d1844b7-d1a1-4352-be79-99e28f3238ca',
-    subscribeKey: 'sub-c-1748ca5e-63aa-448e-ba21-177b9b183427',
-    userId: myId
+  // Menggunakan STUN Server publik bawaan Google agar koneksi HP lebih tembus NAT/Mobile Data
+  peer=new Peer(toPeer(myId), {
+    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }]}
   });
 
-  pubnub.addListener({
-    status: function(s) {
-      if (s.category === "PNConnectedCategory") {
-        setStatus('Online sebagai ' + myId);
-      } else if (s.category === "PNNetworkDownCategory") {
-        setStatus('Terputus, menyambung ulang…');
-      }
-    },
-    message: function(m) {
-      var d = m.message;
-      if (d.to === myId) {
-        var sender = d.from;
-        chats[sender] = chats[sender] || [];
-        if(!chats[sender].some(function(x){return x.id === d.id})){
-          chats[sender].push({id: d.id, from: 'them', text: String(d.text).slice(0,1000), ts: d.ts});
-          if(current !== sender) unread[sender] = (unread[sender] || 0) + 1;
-          addContact(sender); save();
-        }
-        render();
-      }
+  peer.on('open',function(){
+    setStatus('Online sebagai '+myId);
+    contacts.forEach(function(d){connectTo(toPeer(d))});
+  });
+
+  peer.on('connection',setupConn);
+
+  peer.on('disconnected',function(){
+    setStatus('Terputus, menyambung ulang…');
+    setTimeout(function(){try{peer.reconnect()}catch(e){}},2000);
+  });
+
+  peer.on('error',function(e){
+    if(e.type==='unavailable-id') setStatus('ID sedang dipakai di tab/HP lain.');
+    else setStatus('Menghubungkan ke jaringan…');
+  });
+}
+
+function setupConn(c){
+  var pid=c.peer;
+  conns[pid]=c;
+  c.on('open',function(){addContact(toDisp(pid));flush(pid);render()});
+  c.on('data',function(d){onData(pid,d)});
+  c.on('close',function(){if(conns[pid]===c)delete conns[pid];render()});
+  c.on('error',function(){if(conns[pid]===c)delete conns[pid];render()});
+}
+
+function connectTo(pid){
+  var c=conns[pid];
+  if(c&&c.open)return;
+  if(!peer||peer.disconnected||peer.destroyed)return;
+  setupConn(peer.connect(pid,{reliable:true}));
+}
+
+// Kirim ulang otomatis pesan tertunda begitu HP terhubung lagi
+function flush(pid){
+  var d=toDisp(pid),c=conns[pid];
+  if(!c||!c.open)return;
+  (chats[d]||[]).forEach(function(m){
+    if(m.from==='me'&&!m.ok){
+      c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});
     }
   });
+}
 
-  // Menerima pesan yang masuk ke ID kita
-  pubnub.subscribe({ channels: [myId] });
+function onData(pid,d){
+  var disp=toDisp(pid);
+  if(d.t==='msg'){
+    chats[disp]=chats[disp]||[];
+    if(!chats[disp].some(function(m){return m.id===d.id})){
+      chats[disp].push({id:d.id,from:'them',text:String(d.text).slice(0,1000),ts:d.ts||Date.now()});
+      if(current!==disp)unread[disp]=(unread[disp]||0)+1;
+    }
+    addContact(disp);save();
+    try{conns[pid].send({t:'ack',id:d.id})}catch(e){}
+  }else if(d.t==='ack'){
+    (chats[disp]||[]).forEach(function(m){if(m.id===d.id)m.ok=true});save();
+  }
+  render();
 }
 
 function render(){
@@ -133,7 +168,7 @@ function render(){
   if(!contacts.length){l.innerHTML='<div class="mut">Belum ada kontak. Masukkan ID teman di atas.</div>'}
   contacts.forEach(function(d){
     var el=document.createElement('div');el.className='u';
-    var dot=document.createElement('span');dot.className='dot on';
+    var dot=document.createElement('span');dot.className='dot'+(isOnline(d)?' on':'');
     var b=document.createElement('b');b.textContent=d;
     el.appendChild(dot);el.appendChild(b);
     if(unread[d]){var bg=document.createElement('span');bg.className='badge';bg.textContent=unread[d];el.appendChild(bg)}
@@ -141,14 +176,15 @@ function render(){
     l.appendChild(el);
   });
   if(current){
-    $('cstat').textContent='online';
+    $('cstat').textContent=isOnline(current)?'online':'offline';
     var box=$('msgs');box.textContent='';
     (chats[current]||[]).slice().sort(function(a,b){return a.ts-b.ts}).forEach(function(m){
-      var el=document.createElement('div');el.className='m'+(m.from==='me'?' me':'');
-      el.textContent=m.text;
+      var el=document.className='m'+(m.from==='me'?' me':'');
+      var div=document.createElement('div');div.className='m'+(m.from==='me'?' me':'');
+      div.textContent=m.text;
       var t=document.createElement('small');
-      t.textContent=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + (m.from==='me'?' ✓':'');
-      el.appendChild(t);box.appendChild(el);
+      t.textContent=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+(m.from==='me'?(m.ok?' ✓✓':' ⏳'):'');
+      div.appendChild(t);box.appendChild(div);
     });
     box.scrollTop=box.scrollHeight;
   }
@@ -162,32 +198,30 @@ function openChat(raw){
   addContact(d);current=d;unread[d]=0;save();
   $('home').style.display='none';$('chat').style.display='flex';
   $('back').style.display='inline-block';$('title').textContent=d;
-  render();
+  connectTo(toPeer(d));render();
 }
+
 function closeChat(){
   current=null;$('chat').style.display='none';$('home').style.display='flex';
   $('back').style.display='none';$('title').textContent='Chat HP';$('cstat').textContent='';render();
 }
+
 function send(){
   var t=$('txt').value.trim();
   if(!t||!current)return;
   $('txt').value='';
+  var m={id:uid(),from:'me',text:t.slice(0,1000),ts:Date.now(),ok:false};
+  (chats[current]=chats[current]||[]).push(m);save();
   
-  var ts = Date.now();
-  var msgId = uid();
-  var msgData = { id: msgId, from: myId, to: current, text: t.slice(0,1000), ts: ts };
-  
-  // Kirim pesan via Server Cloud
-  pubnub.publish({
-    channel: current,
-    message: msgData
-  });
-
-  var m = { id: msgId, from: 'me', text: t.slice(0,1000), ts: ts };
-  (chats[current]=chats[current]||[]).push(m);
-  save();
+  var c=conns[toPeer(current)];
+  if(c&&c.open){
+    c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});
+  } else {
+    connectTo(toPeer(current));
+  }
   render();
 }
+
 function restore(){
   var n=digits($('restore').value);
   if(n.length!==6){alert('Format ID: HP-123456');return}
@@ -201,8 +235,15 @@ $('send').onclick=send;
 $('txt').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
 $('rbtn').onclick=restore;
 
-render();
-startApp();
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&peer){
+    if(peer.disconnected)try{peer.reconnect()}catch(e){}
+    contacts.forEach(function(d){connectTo(toPeer(d))});
+  }
+});
+
+setInterval(function(){if(peer&&peer.open){contacts.forEach(function(d){connectTo(toPeer(d))});render()}},10000);
+render();startPeer();
 </script>
 </body>
 </html>
