@@ -4,9 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chat HP</title>
-<!-- Load Firebase App & Database SDK -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<!-- Library Messaging Real-time Gratis -->
+<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--tx:#1b1d21;--mut:#6b7280;--pri:#16a34a;--me:#dcfce7;--bd:#e5e7eb}
 @media (prefers-color-scheme:dark){:root{--bg:#111316;--card:#1b1e23;--tx:#eceef1;--mut:#9aa1ac;--me:#14532d;--bd:#2a2e35}}
@@ -74,75 +73,59 @@ input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--bd);border-rad
 </div>
 
 <script>
-// --- PASTE KONFIGURASI FIREBASE KAMU DI SINI ---
-var firebaseConfig = {
-  apiKey: "API_KEY_KAMU",
-  authDomain: "PROJECT_ID_KAMU.firebaseapp.com",
-  databaseURL: "https://PROJECT_ID_KAMU-default-rtdb.firebaseio.com",
-  projectId: "PROJECT_ID_KAMU",
-  storageBucket: "PROJECT_ID_KAMU.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
-};
-firebase.initializeApp(firebaseConfig);
-var db = firebase.database();
-
 var mem={};
 function lsGet(k){try{var v=localStorage.getItem(k);return v===null?(mem[k]||null):v}catch(e){return mem[k]||null}}
 function lsSet(k,v){mem[k]=v;try{localStorage.setItem(k,v)}catch(e){}}
 function $(i){return document.getElementById(i)}
 function digits(s){return String(s||'').replace(/\D/g,'')}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 
 var myId=lsGet('hp_id');
 if(!myId){myId='HP-'+Math.floor(100000+Math.random()*900000);lsSet('hp_id',myId)}
 var contacts=JSON.parse(lsGet('hp_contacts')||'[]');
 var chats=JSON.parse(lsGet('hp_chats')||'{}');
 var unread=JSON.parse(lsGet('hp_unread')||'{}');
-var onlineUsers={}, current=null;
+var current=null, pubnub=null;
 
 function save(){lsSet('hp_contacts',JSON.stringify(contacts));lsSet('hp_chats',JSON.stringify(chats));lsSet('hp_unread',JSON.stringify(unread))}
 function setStatus(t){$('status').textContent=t}
 function addContact(d){if(contacts.indexOf(d)<0){contacts.push(d);save()}}
 
-// Inisialisasi Firebase & Sync Status Online
 function startApp(){
   $('myid').textContent=myId;
   
-  // Set status Online ke Firebase
-  var myPresenceRef = db.ref('presence/' + myId);
-  var connectedRef = db.ref('.info/connected');
-  connectedRef.on('value', function(snap) {
-    if (snap.val() === true) {
-      myPresenceRef.onDisconnect().set(false);
-      myPresenceRef.set(true);
-      setStatus('Online sebagai ' + myId);
-    } else {
-      setStatus('Terputus, menyambung ulang…');
+  // Menggunakan server publik gratis
+  pubnub = new PubNub({
+    publishKey: 'pub-c-8d1844b7-d1a1-4352-be79-99e28f3238ca',
+    subscribeKey: 'sub-c-1748ca5e-63aa-448e-ba21-177b9b183427',
+    userId: myId
+  });
+
+  pubnub.addListener({
+    status: function(s) {
+      if (s.category === "PNConnectedCategory") {
+        setStatus('Online sebagai ' + myId);
+      } else if (s.category === "PNNetworkDownCategory") {
+        setStatus('Terputus, menyambung ulang…');
+      }
+    },
+    message: function(m) {
+      var d = m.message;
+      if (d.to === myId) {
+        var sender = d.from;
+        chats[sender] = chats[sender] || [];
+        if(!chats[sender].some(function(x){return x.id === d.id})){
+          chats[sender].push({id: d.id, from: 'them', text: String(d.text).slice(0,1000), ts: d.ts});
+          if(current !== sender) unread[sender] = (unread[sender] || 0) + 1;
+          addContact(sender); save();
+        }
+        render();
+      }
     }
   });
 
-  // Pantau status online semua user
-  db.ref('presence').on('value', function(snap) {
-    onlineUsers = snap.val() || {};
-    render();
-  });
-
-  // Dengarkan pesan masuk di Node ID sendiri
-  db.ref('messages/' + myId).on('child_added', function(snap) {
-    var d = snap.val();
-    var msgId = snap.key;
-    var sender = d.from;
-    
-    chats[sender] = chats[sender] || [];
-    if(!chats[sender].some(function(m){return m.id === msgId})){
-      chats[sender].push({id: msgId, from: 'them', text: String(d.text).slice(0,1000), ts: d.ts || Date.now()});
-      if(current !== sender) unread[sender] = (unread[sender] || 0) + 1;
-      addContact(sender); save();
-    }
-    // Hapus pesan dari antrean server setelah diterima
-    db.ref('messages/' + myId + '/' + msgId).remove();
-    render();
-  });
+  // Menerima pesan yang masuk ke ID kita
+  pubnub.subscribe({ channels: [myId] });
 }
 
 function render(){
@@ -150,8 +133,7 @@ function render(){
   if(!contacts.length){l.innerHTML='<div class="mut">Belum ada kontak. Masukkan ID teman di atas.</div>'}
   contacts.forEach(function(d){
     var el=document.createElement('div');el.className='u';
-    var isOnline = !!onlineUsers[d];
-    var dot=document.createElement('span');dot.className='dot'+(isOnline?' on':'');
+    var dot=document.createElement('span');dot.className='dot on';
     var b=document.createElement('b');b.textContent=d;
     el.appendChild(dot);el.appendChild(b);
     if(unread[d]){var bg=document.createElement('span');bg.className='badge';bg.textContent=unread[d];el.appendChild(bg)}
@@ -159,7 +141,7 @@ function render(){
     l.appendChild(el);
   });
   if(current){
-    $('cstat').textContent=onlineUsers[current]?'online':'offline';
+    $('cstat').textContent='online';
     var box=$('msgs');box.textContent='';
     (chats[current]||[]).slice().sort(function(a,b){return a.ts-b.ts}).forEach(function(m){
       var el=document.createElement('div');el.className='m'+(m.from==='me'?' me':'');
@@ -192,13 +174,16 @@ function send(){
   $('txt').value='';
   
   var ts = Date.now();
-  var msgData = { from: myId, text: t.slice(0,1000), ts: ts };
+  var msgId = uid();
+  var msgData = { id: msgId, from: myId, to: current, text: t.slice(0,1000), ts: ts };
   
-  // Kirim langsung ke Firebase (Otomatis tersimpan di Cloud meskipun browser pengirim ditutup)
-  var newMsgRef = db.ref('messages/' + current).push();
-  newMsgRef.set(msgData);
+  // Kirim pesan via Server Cloud
+  pubnub.publish({
+    channel: current,
+    message: msgData
+  });
 
-  var m = { id: newMsgRef.key, from: 'me', text: t.slice(0,1000), ts: ts };
+  var m = { id: msgId, from: 'me', text: t.slice(0,1000), ts: ts };
   (chats[current]=chats[current]||[]).push(m);
   save();
   render();
