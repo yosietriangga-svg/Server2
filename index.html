@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chat HP</title>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- Load Firebase App & Database SDK -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--tx:#1b1d21;--mut:#6b7280;--pri:#16a34a;--me:#dcfce7;--bd:#e5e7eb}
 @media (prefers-color-scheme:dark){:root{--bg:#111316;--card:#1b1e23;--tx:#eceef1;--mut:#9aa1ac;--me:#14532d;--bd:#2a2e35}}
@@ -72,74 +74,75 @@ input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--bd);border-rad
 </div>
 
 <script>
+// --- PASTE KONFIGURASI FIREBASE KAMU DI SINI ---
+var firebaseConfig = {
+  apiKey: "API_KEY_KAMU",
+  authDomain: "PROJECT_ID_KAMU.firebaseapp.com",
+  databaseURL: "https://PROJECT_ID_KAMU-default-rtdb.firebaseio.com",
+  projectId: "PROJECT_ID_KAMU",
+  storageBucket: "PROJECT_ID_KAMU.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
 var mem={};
 function lsGet(k){try{var v=localStorage.getItem(k);return v===null?(mem[k]||null):v}catch(e){return mem[k]||null}}
 function lsSet(k,v){mem[k]=v;try{localStorage.setItem(k,v)}catch(e){}}
 function $(i){return document.getElementById(i)}
 function digits(s){return String(s||'').replace(/\D/g,'')}
-function toPeer(d){return 'chathp-'+digits(d)}
-function toDisp(p){return 'HP-'+p.replace('chathp-','')}
-function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 
 var myId=lsGet('hp_id');
 if(!myId){myId='HP-'+Math.floor(100000+Math.random()*900000);lsSet('hp_id',myId)}
 var contacts=JSON.parse(lsGet('hp_contacts')||'[]');
 var chats=JSON.parse(lsGet('hp_chats')||'{}');
 var unread=JSON.parse(lsGet('hp_unread')||'{}');
-var conns={}, peer=null, current=null;
+var onlineUsers={}, current=null;
 
 function save(){lsSet('hp_contacts',JSON.stringify(contacts));lsSet('hp_chats',JSON.stringify(chats));lsSet('hp_unread',JSON.stringify(unread))}
 function setStatus(t){$('status').textContent=t}
-function isOnline(d){var c=conns[toPeer(d)];return !!(c&&c.open)}
 function addContact(d){if(contacts.indexOf(d)<0){contacts.push(d);save()}}
 
-function startPeer(){
+// Inisialisasi Firebase & Sync Status Online
+function startApp(){
   $('myid').textContent=myId;
-  if(typeof Peer==='undefined'){setStatus('Gagal memuat PeerJS. Cek koneksi internet.');return}
-  peer=new Peer(toPeer(myId));
-  peer.on('open',function(){setStatus('Online sebagai '+myId);contacts.forEach(function(d){connectTo(toPeer(d))})});
-  peer.on('connection',setupConn);
-  peer.on('disconnected',function(){setStatus('Terputus, menyambung ulang…');setTimeout(function(){try{peer.reconnect()}catch(e){}},2000)});
-  peer.on('error',function(e){
-    if(e.type==='unavailable-id')setStatus('ID ini sedang dipakai di tab/HP lain. Tutup yang lain lalu muat ulang.');
-    else if(e.type==='peer-unavailable')render();
-    else if(e.type==='network'||e.type==='server-error'||e.type==='socket-error')setStatus('Masalah jaringan, mencoba lagi…');
-  });
-}
-
-function setupConn(c){
-  var pid=c.peer;
-  conns[pid]=c;
-  c.on('open',function(){addContact(toDisp(pid));flush(pid);render()});
-  c.on('data',function(d){onData(pid,d)});
-  c.on('close',function(){if(conns[pid]===c)delete conns[pid];render()});
-  c.on('error',function(){if(conns[pid]===c)delete conns[pid];render()});
-}
-function connectTo(pid){
-  var c=conns[pid];
-  if(c&&c.open)return;
-  if(!peer||peer.disconnected||peer.destroyed)return;
-  setupConn(peer.connect(pid,{reliable:true}));
-}
-function flush(pid){
-  var d=toDisp(pid),c=conns[pid];
-  if(!c||!c.open)return;
-  (chats[d]||[]).forEach(function(m){if(m.from==='me'&&!m.ok)c.send({t:'msg',id:m.id,text:m.text,ts:m.ts})});
-}
-function onData(pid,d){
-  var disp=toDisp(pid);
-  if(d.t==='msg'){
-    chats[disp]=chats[disp]||[];
-    if(!chats[disp].some(function(m){return m.id===d.id})){
-      chats[disp].push({id:d.id,from:'them',text:String(d.text).slice(0,1000),ts:d.ts||Date.now()});
-      if(current!==disp)unread[disp]=(unread[disp]||0)+1;
+  
+  // Set status Online ke Firebase
+  var myPresenceRef = db.ref('presence/' + myId);
+  var connectedRef = db.ref('.info/connected');
+  connectedRef.on('value', function(snap) {
+    if (snap.val() === true) {
+      myPresenceRef.onDisconnect().set(false);
+      myPresenceRef.set(true);
+      setStatus('Online sebagai ' + myId);
+    } else {
+      setStatus('Terputus, menyambung ulang…');
     }
-    addContact(disp);save();
-    try{conns[pid].send({t:'ack',id:d.id})}catch(e){}
-  }else if(d.t==='ack'){
-    (chats[disp]||[]).forEach(function(m){if(m.id===d.id)m.ok=true});save();
-  }
-  render();
+  });
+
+  // Pantau status online semua user
+  db.ref('presence').on('value', function(snap) {
+    onlineUsers = snap.val() || {};
+    render();
+  });
+
+  // Dengarkan pesan masuk di Node ID sendiri
+  db.ref('messages/' + myId).on('child_added', function(snap) {
+    var d = snap.val();
+    var msgId = snap.key;
+    var sender = d.from;
+    
+    chats[sender] = chats[sender] || [];
+    if(!chats[sender].some(function(m){return m.id === msgId})){
+      chats[sender].push({id: msgId, from: 'them', text: String(d.text).slice(0,1000), ts: d.ts || Date.now()});
+      if(current !== sender) unread[sender] = (unread[sender] || 0) + 1;
+      addContact(sender); save();
+    }
+    // Hapus pesan dari antrean server setelah diterima
+    db.ref('messages/' + myId + '/' + msgId).remove();
+    render();
+  });
 }
 
 function render(){
@@ -147,7 +150,8 @@ function render(){
   if(!contacts.length){l.innerHTML='<div class="mut">Belum ada kontak. Masukkan ID teman di atas.</div>'}
   contacts.forEach(function(d){
     var el=document.createElement('div');el.className='u';
-    var dot=document.createElement('span');dot.className='dot'+(isOnline(d)?' on':'');
+    var isOnline = !!onlineUsers[d];
+    var dot=document.createElement('span');dot.className='dot'+(isOnline?' on':'');
     var b=document.createElement('b');b.textContent=d;
     el.appendChild(dot);el.appendChild(b);
     if(unread[d]){var bg=document.createElement('span');bg.className='badge';bg.textContent=unread[d];el.appendChild(bg)}
@@ -155,13 +159,13 @@ function render(){
     l.appendChild(el);
   });
   if(current){
-    $('cstat').textContent=isOnline(current)?'online':'offline';
+    $('cstat').textContent=onlineUsers[current]?'online':'offline';
     var box=$('msgs');box.textContent='';
     (chats[current]||[]).slice().sort(function(a,b){return a.ts-b.ts}).forEach(function(m){
       var el=document.createElement('div');el.className='m'+(m.from==='me'?' me':'');
       el.textContent=m.text;
       var t=document.createElement('small');
-      t.textContent=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+(m.from==='me'?(m.ok?' ✓✓':' ⏳'):'');
+      t.textContent=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + (m.from==='me'?' ✓':'');
       el.appendChild(t);box.appendChild(el);
     });
     box.scrollTop=box.scrollHeight;
@@ -176,7 +180,7 @@ function openChat(raw){
   addContact(d);current=d;unread[d]=0;save();
   $('home').style.display='none';$('chat').style.display='flex';
   $('back').style.display='inline-block';$('title').textContent=d;
-  connectTo(toPeer(d));render();
+  render();
 }
 function closeChat(){
   current=null;$('chat').style.display='none';$('home').style.display='flex';
@@ -186,10 +190,17 @@ function send(){
   var t=$('txt').value.trim();
   if(!t||!current)return;
   $('txt').value='';
-  var m={id:uid(),from:'me',text:t.slice(0,1000),ts:Date.now(),ok:false};
-  (chats[current]=chats[current]||[]).push(m);save();
-  var c=conns[toPeer(current)];
-  if(c&&c.open)c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});else connectTo(toPeer(current));
+  
+  var ts = Date.now();
+  var msgData = { from: myId, text: t.slice(0,1000), ts: ts };
+  
+  // Kirim langsung ke Firebase (Otomatis tersimpan di Cloud meskipun browser pengirim ditutup)
+  var newMsgRef = db.ref('messages/' + current).push();
+  newMsgRef.set(msgData);
+
+  var m = { id: newMsgRef.key, from: 'me', text: t.slice(0,1000), ts: ts };
+  (chats[current]=chats[current]||[]).push(m);
+  save();
   render();
 }
 function restore(){
@@ -204,14 +215,9 @@ $('back').onclick=closeChat;
 $('send').onclick=send;
 $('txt').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
 $('rbtn').onclick=restore;
-document.addEventListener('visibilitychange',function(){
-  if(!document.hidden&&peer){
-    if(peer.disconnected)try{peer.reconnect()}catch(e){}
-    contacts.forEach(function(d){connectTo(toPeer(d))});
-  }
-});
-setInterval(function(){if(peer&&peer.open){contacts.forEach(function(d){connectTo(toPeer(d))});render()}},15000);
-render();startPeer();
+
+render();
+startApp();
 </script>
 </body>
 </html>
