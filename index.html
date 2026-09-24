@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chat HP</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1b1d21;--mut:#6b7280;--pri:#16a34a;--me:#dcfce7;--bd:#e5e7eb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111316;--card:#1b1e23;--tx:#eceef1;--mut:#9aa1ac;--me:#14532d;--bd:#2a2e35}}
+:root[data-theme="dark"]{--bg:#111316;--card:#1b1e23;--tx:#eceef1;--mut:#9aa1ac;--me:#14532d;--bd:#2a2e35}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#app{height:100%;display:flex;flex-direction:column;max-width:600px;margin:0 auto}
+header{padding:12px 14px;background:var(--card);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1}
+button{background:var(--pri);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:15px}
+button.ghost{background:transparent;color:var(--pri);padding:6px 8px}
+input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font-size:16px}
+.box{padding:12px 14px}
+.idcard{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+.idcard b{font-size:22px;letter-spacing:1px;color:var(--pri)}
+.mut{color:var(--mut);font-size:13px}
+.row{display:flex;gap:8px;margin:8px 0}
+#list{flex:1;overflow:auto;padding:0 14px 14px}
+.u{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between}
+#chat{display:none;flex:1;flex-direction:column;min-height:0}
+#msgs{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:80%;padding:8px 11px;border-radius:14px;background:var(--card);border:1px solid var(--bd);align-self:flex-start;word-break:break-word}
+.m.me{background:var(--me);align-self:flex-end}
+.m small{display:block;color:var(--mut);font-size:11px;margin-top:2px}
+.bar{display:flex;gap:8px;padding:10px 14px;background:var(--card);border-top:1px solid var(--bd)}
+#warn{display:none;margin:12px 14px;padding:12px;border-radius:10px;background:#fef3c7;color:#78350f;font-size:14px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button class="ghost" id="back" style="display:none">←</button>
+    <h1 id="title">Chat HP</h1>
+  </header>
+  <div id="warn"></div>
+
+  <div id="home" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="box">
+      <div class="idcard">
+        <div class="mut">ID HP kamu (permanen)</div>
+        <b id="myid">…</b>
+        <div class="mut" style="margin-top:6px">Bagikan ID ini ke teman. ID tersimpan di HP dan di database, jadi tidak hilang.</div>
+      </div>
+      <div class="row">
+        <input id="peerid" placeholder="Masukkan ID teman, mis. HP-123456" autocapitalize="characters">
+        <button id="go">Chat</button>
+      </div>
+      <details class="mut"><summary>Pindah HP / ID hilang?</summary>
+        <div class="row"><input id="restore" placeholder="Masukkan ID lama"><button id="rbtn">Pulihkan</button></div>
+      </details>
+    </div>
+    <div class="mut" style="padding:0 14px 6px">Semua HP terdaftar</div>
+    <div id="list"></div>
+  </div>
+
+  <div id="chat">
+    <div id="msgs"></div>
+    <div class="bar"><input id="txt" placeholder="Tulis pesan…"><button id="send">Kirim</button></div>
+  </div>
+</div>
+
+<script>
+var $=function(i){return document.getElementById(i)};
+var mem={}, db=null, me=null, peer=null, unsub=null, readyRes, ready=new Promise(function(r){readyRes=r});
+var NOCONN='Chat belum tersambung. Buka lewat link claude.ai (bukan file unduhan) dan pastikan sudah login.';
+
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return mem[k]||null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){mem[k]=v}}
+function warn(t){var w=$('warn');w.textContent=t;w.style.display='block'}
+function newId(){return 'HP-'+String(Math.floor(100000+Math.random()*900000))}
+function pairKey(a,b){return [a,b].sort().join('_')}
+function norm(s){return (s||'').trim().toUpperCase()}
+
+async function init(){
+  me=lsGet('hp_id');
+  if(!me){me=newId();lsSet('hp_id',me)}
+  $('myid').textContent=me;
+  if(!window.claude||!window.claude.use){warn(NOCONN);readyRes();return}
+  db=await window.claude.use('db');
+  readyRes();
+  if(!db){warn(NOCONN);return}
+  try{
+    var ref=db.doc('users/'+me), s=await ref.get();
+    if(s.exists){await ref.update({lastSeen:Date.now()})}
+    else{await ref.set({id:me,created:Date.now(),lastSeen:Date.now()})}
+  }catch(e){warn('Gagal mendaftarkan ID: '+(e.code||e.message))}
+  db.collection('users').onSnapshot(function(snap){
+    var l=$('list');l.textContent='';
+    snap.docs.forEach(function(d){
+      if(d.id===me)return;
+      var el=document.createElement('div');el.className='u';
+      var a=document.createElement('b');a.textContent=d.id;
+      var bt=document.createElement('button');bt.textContent='Chat';
+      bt.onclick=function(){openChat(d.id)};
+      el.appendChild(a);el.appendChild(bt);l.appendChild(el);
+    });
+    if(!l.children.length){l.innerHTML='<div class="mut">Belum ada HP lain. Buka link ini di HP kedua.</div>'}
+  },function(e){warn('Error: '+e.code)});
+}
+
+async function openChat(id){
+  id=norm(id);
+  if(!id){alert('Isi ID teman dulu');return}
+  if(id===me){alert('Itu ID kamu sendiri');return}
+  await ready;
+  if(!db){alert(NOCONN);return}
+  var s;
+  try{s=await db.doc('users/'+id).get()}catch(e){alert('Error: '+(e.code||e.message));return}
+  if(!s.exists){alert('ID '+id+' tidak ditemukan');return}
+  peer=id;
+  $('home').style.display='none';$('chat').style.display='flex';
+  $('back').style.display='inline-block';$('title').textContent=id;
+  if(unsub)unsub();
+  unsub=db.collection('messages').where('chat','==',pairKey(me,peer)).onSnapshot(function(snap){
+    var arr=snap.docs.map(function(d){return d.data()}).sort(function(a,b){return a.ts-b.ts});
+    var box=$('msgs');box.textContent='';
+    arr.forEach(function(m){
+      var el=document.createElement('div');el.className='m'+(m.from===me?' me':'');
+      el.textContent=m.text;
+      var t=document.createElement('small');t.textContent=new Date(m.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      el.appendChild(t);box.appendChild(el);
+    });
+    box.scrollTop=box.scrollHeight;
+  },function(e){warn('Error: '+e.code)});
+}
+
+function closeChat(){
+  if(unsub){unsub();unsub=null}
+  peer=null;
+  $('chat').style.display='none';$('home').style.display='flex';
+  $('back').style.display='none';$('title').textContent='Chat HP';
+}
+
+async function send(){
+  var t=$('txt').value.trim();
+  if(!t||!peer)return;
+  if(!db){alert(NOCONN);return}
+  $('txt').value='';
+  try{await db.collection('messages').add({chat:pairKey(me,peer),from:me,to:peer,text:t.slice(0,1000),ts:Date.now()})}
+  catch(e){warn('Gagal kirim: '+(e.code||e.message))}
+}
+
+async function restore(){
+  var id=norm($('restore').value);
+  if(!id)return;
+  await ready;
+  if(!db){alert(NOCONN);return}
+  var s=await db.doc('users/'+id).get();
+  if(!s.exists){alert('ID tidak ditemukan');return}
+  lsSet('hp_id',id);location.reload();
+}
+
+$('go').onclick=function(){openChat($('peerid').value)};
+$('back').onclick=closeChat;
+$('send').onclick=send;
+$('txt').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+$('rbtn').onclick=restore;
+init();
+</script>
+</body>
+</html>
