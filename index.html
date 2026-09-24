@@ -96,27 +96,14 @@ function addContact(d){if(contacts.indexOf(d)<0){contacts.push(d);save()}}
 function startPeer(){
   $('myid').textContent=myId;
   if(typeof Peer==='undefined'){setStatus('Gagal memuat PeerJS. Cek koneksi internet.');return}
-  
-  // Menggunakan STUN Server publik bawaan Google agar koneksi HP lebih tembus NAT/Mobile Data
-  peer=new Peer(toPeer(myId), {
-    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }]}
-  });
-
-  peer.on('open',function(){
-    setStatus('Online sebagai '+myId);
-    contacts.forEach(function(d){connectTo(toPeer(d))});
-  });
-
+  peer=new Peer(toPeer(myId));
+  peer.on('open',function(){setStatus('Online sebagai '+myId);contacts.forEach(function(d){connectTo(toPeer(d))})});
   peer.on('connection',setupConn);
-
-  peer.on('disconnected',function(){
-    setStatus('Terputus, menyambung ulang…');
-    setTimeout(function(){try{peer.reconnect()}catch(e){}},2000);
-  });
-
+  peer.on('disconnected',function(){setStatus('Terputus, menyambung ulang…');setTimeout(function(){try{peer.reconnect()}catch(e){}},2000)});
   peer.on('error',function(e){
-    if(e.type==='unavailable-id') setStatus('ID sedang dipakai di tab/HP lain.');
-    else setStatus('Menghubungkan ke jaringan…');
+    if(e.type==='unavailable-id')setStatus('ID ini sedang dipakai di tab/HP lain. Tutup yang lain lalu muat ulang.');
+    else if(e.type==='peer-unavailable')render();
+    else if(e.type==='network'||e.type==='server-error'||e.type==='socket-error')setStatus('Masalah jaringan, mencoba lagi…');
   });
 }
 
@@ -128,25 +115,17 @@ function setupConn(c){
   c.on('close',function(){if(conns[pid]===c)delete conns[pid];render()});
   c.on('error',function(){if(conns[pid]===c)delete conns[pid];render()});
 }
-
 function connectTo(pid){
   var c=conns[pid];
   if(c&&c.open)return;
   if(!peer||peer.disconnected||peer.destroyed)return;
   setupConn(peer.connect(pid,{reliable:true}));
 }
-
-// Kirim ulang otomatis pesan tertunda begitu HP terhubung lagi
 function flush(pid){
   var d=toDisp(pid),c=conns[pid];
   if(!c||!c.open)return;
-  (chats[d]||[]).forEach(function(m){
-    if(m.from==='me'&&!m.ok){
-      c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});
-    }
-  });
+  (chats[d]||[]).forEach(function(m){if(m.from==='me'&&!m.ok)c.send({t:'msg',id:m.id,text:m.text,ts:m.ts})});
 }
-
 function onData(pid,d){
   var disp=toDisp(pid);
   if(d.t==='msg'){
@@ -179,12 +158,11 @@ function render(){
     $('cstat').textContent=isOnline(current)?'online':'offline';
     var box=$('msgs');box.textContent='';
     (chats[current]||[]).slice().sort(function(a,b){return a.ts-b.ts}).forEach(function(m){
-      var el=document.className='m'+(m.from==='me'?' me':'');
-      var div=document.createElement('div');div.className='m'+(m.from==='me'?' me':'');
-      div.textContent=m.text;
+      var el=document.createElement('div');el.className='m'+(m.from==='me'?' me':'');
+      el.textContent=m.text;
       var t=document.createElement('small');
       t.textContent=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+(m.from==='me'?(m.ok?' ✓✓':' ⏳'):'');
-      div.appendChild(t);box.appendChild(div);
+      el.appendChild(t);box.appendChild(el);
     });
     box.scrollTop=box.scrollHeight;
   }
@@ -200,28 +178,20 @@ function openChat(raw){
   $('back').style.display='inline-block';$('title').textContent=d;
   connectTo(toPeer(d));render();
 }
-
 function closeChat(){
   current=null;$('chat').style.display='none';$('home').style.display='flex';
   $('back').style.display='none';$('title').textContent='Chat HP';$('cstat').textContent='';render();
 }
-
 function send(){
   var t=$('txt').value.trim();
   if(!t||!current)return;
   $('txt').value='';
   var m={id:uid(),from:'me',text:t.slice(0,1000),ts:Date.now(),ok:false};
   (chats[current]=chats[current]||[]).push(m);save();
-  
   var c=conns[toPeer(current)];
-  if(c&&c.open){
-    c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});
-  } else {
-    connectTo(toPeer(current));
-  }
+  if(c&&c.open)c.send({t:'msg',id:m.id,text:m.text,ts:m.ts});else connectTo(toPeer(current));
   render();
 }
-
 function restore(){
   var n=digits($('restore').value);
   if(n.length!==6){alert('Format ID: HP-123456');return}
@@ -234,15 +204,13 @@ $('back').onclick=closeChat;
 $('send').onclick=send;
 $('txt').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
 $('rbtn').onclick=restore;
-
 document.addEventListener('visibilitychange',function(){
   if(!document.hidden&&peer){
     if(peer.disconnected)try{peer.reconnect()}catch(e){}
     contacts.forEach(function(d){connectTo(toPeer(d))});
   }
 });
-
-setInterval(function(){if(peer&&peer.open){contacts.forEach(function(d){connectTo(toPeer(d))});render()}},10000);
+setInterval(function(){if(peer&&peer.open){contacts.forEach(function(d){connectTo(toPeer(d))});render()}},15000);
 render();startPeer();
 </script>
 </body>
