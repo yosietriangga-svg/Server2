@@ -1,239 +1,246 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Catatan</title>
-<style>
-  :root{
-    --paper:#EFEAE1; --card:#FFFDF8; --ink:#2B2620; --ink-muted:#83786A;
-    --accent:#3D5A73; --danger:#A6483C; --border:#DED5C3;
-    --rule:#E4DCC8; --margin:#C17B6B;
-    box-sizing:border-box;
-    padding-top:env(safe-area-inset-top,0px);
-    padding-bottom:env(safe-area-inset-bottom,0px);
-  }
-  @media (prefers-color-scheme:dark){
-    :root:not([data-theme="light"]){
-      --paper:#181613; --card:#221F1B; --ink:#E9E1D2; --ink-muted:#A79C8A;
-      --accent:#8CB0C9; --danger:#D98A7C; --border:#3A352E;
-      --rule:#332F28; --margin:#8B5A4E;
-    }
-  }
-  :root[data-theme="dark"]{
-    --paper:#181613; --card:#221F1B; --ink:#E9E1D2; --ink-muted:#A79C8A;
-    --accent:#8CB0C9; --danger:#D98A7C; --border:#3A352E;
-    --rule:#332F28; --margin:#8B5A4E;
-  }
-  *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;}
-  body{
-    background:var(--paper); color:var(--ink); height:100%; overflow:hidden;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  }
-  .app{display:flex; flex-direction:column; height:100%;}
-  header{
-    padding:calc(14px + env(safe-area-inset-top,0px)) 16px 14px;
-    display:flex; align-items:center; justify-content:space-between;
-    border-bottom:1px solid var(--border); background:var(--card);
-  }
-  h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif; font-size:1.3rem; margin:0; font-weight:600;}
-  button{font-family:inherit; cursor:pointer;}
-  #backBtn{display:none; background:none; border:none; color:var(--accent); font-size:1rem; padding:4px 6px;}
-  #newBtn{background:var(--accent); color:var(--card); border:none; border-radius:18px; padding:8px 16px; font-size:0.9rem;}
-  main{flex:1; position:relative; overflow:hidden;}
-  #listView, #editorView{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
-  #editorView{display:none; flex-direction:column;}
-  #editorView.active{display:flex;}
-  #listView.hidden{display:none;}
-  .empty-state{padding:70px 28px; text-align:center; color:var(--ink-muted); line-height:1.6;}
-  .note-card{
-    background:var(--card); margin:10px 14px; padding:14px 16px;
-    border-radius:8px 8px 4px 4px; border:1px solid var(--border);
-  }
-  .note-date{font-size:0.78rem; color:var(--ink-muted); margin-bottom:5px;}
-  .note-preview{font-size:0.97rem; line-height:1.4; white-space:pre-wrap; max-height:3.9em; overflow:hidden;}
-  .note-preview.empty{color:var(--ink-muted); font-style:italic;}
-  .editor-meta{
-    padding:10px 16px; border-bottom:1px solid var(--border);
-    display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
-  }
-  .editor-meta div{font-size:0.78rem; color:var(--ink-muted); line-height:1.5;}
-  #deleteBtn{background:none; border:none; color:var(--danger); font-size:0.85rem; padding:4px 2px; white-space:nowrap;}
-  #deleteArea{display:flex; align-items:center;}
-  #confirmBar{display:none; align-items:center; gap:8px; font-size:0.82rem; color:var(--ink-muted); white-space:nowrap;}
-  #confirmBar.active{display:flex;}
-  #confirmDeleteBtn{background:none; border:none; color:var(--danger); font-size:0.85rem; padding:4px 2px; font-weight:600;}
-  #cancelDeleteBtn{background:none; border:none; color:var(--ink-muted); font-size:0.85rem; padding:4px 2px;}
-  #editor{
-    flex:1; border:none; outline:none; resize:none; color:var(--ink);
-    padding:14px 16px 14px 56px; font-size:1rem; line-height:28px; font-family:inherit;
-    background-color:var(--paper);
-    background-image:
-      linear-gradient(to right, transparent 0 43px, var(--margin) 43px 44px, transparent 44px 100%),
-      repeating-linear-gradient(to bottom, transparent 0 27px, var(--rule) 27px 28px);
-    background-attachment:local, local;
-    padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));
-  }
-  ::placeholder{color:var(--ink-muted);}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Catatan Saya</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            border-color: #3498db;
+        }
+
+        textarea {
+            resize: vertical;
+            height: 100px;
+        }
+
+        button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #27ae60;
+        }
+
+        .notes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .note-card {
+            background: #fdfdfd;
+            border-left: 5px solid #3498db;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .note-card h3 {
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+
+        .note-card p {
+            color: #555;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+
+        .note-card .date {
+            font-size: 11px;
+            color: #999;
+            margin-top: 10px;
+            display: block;
+        }
+
+        .btn-delete {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .btn-delete:hover {
+            background: #c0392b;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+        }
+    </style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <button id="backBtn">‹ Kembali</button>
-    <h1 id="headerTitle">Catatan</h1>
-    <button id="newBtn">+ Tulis</button>
-  </header>
-  <main>
-    <div id="listView"></div>
-    <div id="editorView">
-      <div class="editor-meta">
-        <div id="metaText"></div>
-        <div id="deleteArea">
-          <button id="deleteBtn">Hapus</button>
-          <div id="confirmBar">
-            <span>Yakin?</span>
-            <button id="confirmDeleteBtn">Ya, hapus</button>
-            <button id="cancelDeleteBtn">Batal</button>
-          </div>
+
+    <div class="container">
+        <h1>📝 Catatan Saya</h1>
+        
+        <div class="input-group">
+            <input type="text" id="noteTitle" placeholder="Judul catatan..." required>
+            <textarea id="noteContent" placeholder="Tulis isi catatan di sini..." required></textarea>
+            <button onclick="addNote()">Tambah Catatan</button>
         </div>
-      </div>
-      <textarea id="editor" placeholder="Tulis catatan di sini..."></textarea>
+
+        <div class="notes-list" id="notesContainer">
+            <!-- Catatan akan muncul di sini -->
+        </div>
     </div>
-  </main>
-</div>
-<script>
-(function(){
-  var STORAGE_KEY = 'catatan_notes_v1';
-  var notes = [];
-  var currentId = null;
-  var saveTimeout = null;
 
-  function loadNotes(){
-    try{ var raw = localStorage.getItem(STORAGE_KEY); notes = raw ? JSON.parse(raw) : []; }
-    catch(e){ notes = []; }
-  }
-  function persist(){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); }catch(e){}
-  }
-  function fmtLong(iso){
-    var d = new Date(iso);
-    return d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}) +
-      ' pukul ' + d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  }
-  function fmtTime(iso){
-    return new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  }
-  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-  function escapeHtml(s){
-    return s.replace(/[&<>"']/g, function(c){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-    });
-  }
+    <script>
+        // Fungsi untuk mengambil data dari LocalStorage
+        function getNotes() {
+            const notes = localStorage.getItem('my_notes');
+            return notes ? JSON.parse(notes) : [];
+        }
 
-  var listView = document.getElementById('listView');
-  var editorView = document.getElementById('editorView');
-  var editor = document.getElementById('editor');
-  var metaText = document.getElementById('metaText');
-  var backBtn = document.getElementById('backBtn');
-  var newBtn = document.getElementById('newBtn');
-  var deleteBtn = document.getElementById('deleteBtn');
-  var confirmBar = document.getElementById('confirmBar');
-  var confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-  var cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        // Fungsi untuk menyimpan catatan baru
+        function addNote() {
+            const titleInput = document.getElementById('noteTitle');
+            const contentInput = document.getElementById('noteContent');
 
-  function resetDeleteState(){
-    confirmBar.classList.remove('active');
-    deleteBtn.style.display = 'inline-block';
-  }
+            const title = titleInput.value.trim();
+            const content = contentInput.value.trim();
 
-  function renderList(){
-    listView.innerHTML = '';
-    if(notes.length === 0){
-      listView.innerHTML = '<div class="empty-state">Belum ada catatan tersimpan.<br>Ketuk "+ Tulis" untuk membuat catatan pertama.</div>';
-      return;
-    }
-    var sorted = notes.slice().sort(function(a,b){ return new Date(b.updatedAt) - new Date(a.updatedAt); });
-    sorted.forEach(function(n){
-      var card = document.createElement('div');
-      card.className = 'note-card';
-      var hasText = n.content.trim().length > 0;
-      card.innerHTML =
-        '<div class="note-date">' + fmtLong(n.updatedAt) + '</div>' +
-        '<div class="note-preview' + (hasText ? '' : ' empty') + '">' +
-        escapeHtml(hasText ? n.content : 'Catatan kosong') + '</div>';
-      card.addEventListener('click', function(){ openNote(n.id); });
-      listView.appendChild(card);
-    });
-  }
+            if (!title || !content) {
+                alert('Judul dan isi catatan tidak boleh kosong!');
+                return;
+            }
 
-  function updateMeta(n){
-    metaText.innerHTML =
-      '<div>Dibuat ' + fmtLong(n.createdAt) + '</div>' +
-      '<div>Tersimpan otomatis pukul ' + fmtTime(n.updatedAt) + '</div>';
-  }
-  function openNote(id){
-    currentId = id;
-    var n = notes.find(function(x){ return x.id === id; });
-    editor.value = n.content;
-    updateMeta(n);
-    resetDeleteState();
-    editorView.classList.add('active');
-    listView.classList.add('hidden');
-    backBtn.style.display = 'inline-block';
-    newBtn.style.display = 'none';
-    setTimeout(function(){ editor.focus(); }, 50);
-  }
-  function goToList(){
-    flushSave();
-    editorView.classList.remove('active');
-    listView.classList.remove('hidden');
-    backBtn.style.display = 'none';
-    newBtn.style.display = 'inline-block';
-    currentId = null;
-    renderList();
-  }
-  function createNote(){
-    var now = new Date().toISOString();
-    var n = { id: uid(), content: '', createdAt: now, updatedAt: now };
-    notes.push(n);
-    persist();
-    openNote(n.id);
-  }
-  function doSave(){
-    var n = notes.find(function(x){ return x.id === currentId; });
-    if(!n) return;
-    if(n.content !== editor.value){
-      n.content = editor.value;
-      n.updatedAt = new Date().toISOString();
-      persist();
-      updateMeta(n);
-    }
-  }
-  function flushSave(){ clearTimeout(saveTimeout); doSave(); }
+            const newNote = {
+                id: Date.now(),
+                title: title,
+                content: content,
+                date: new Date().toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
 
-  editor.addEventListener('input', function(){
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(doSave, 400);
-  });
-  newBtn.addEventListener('click', createNote);
-  backBtn.addEventListener('click', goToList);
-  deleteBtn.addEventListener('click', function(){
-    deleteBtn.style.display = 'none';
-    confirmBar.classList.add('active');
-  });
-  cancelDeleteBtn.addEventListener('click', resetDeleteState);
-  confirmDeleteBtn.addEventListener('click', function(){
-    if(!currentId) return;
-    notes = notes.filter(function(x){ return x.id !== currentId; });
-    persist();
-    goToList();
-  });
+            const notes = getNotes();
+            notes.unshift(newNote); // Tambahkan ke paling atas
+            localStorage.setItem('my_notes', JSON.stringify(notes));
 
-  loadNotes();
-  renderList();
-})();
-</script>
+            // Reset form input
+            titleInput.value = '';
+            contentInput.value = '';
+
+            renderNotes();
+        }
+
+        // Fungsi untuk menghapus catatan
+        function deleteNote(id) {
+            if (confirm('Apakah Anda yakin ingin menghapus catatan ini?')) {
+                let notes = getNotes();
+                notes = notes.filter(note => note.id !== id);
+                localStorage.setItem('my_notes', JSON.stringify(notes));
+                renderNotes();
+            }
+        }
+
+        // Fungsi untuk menampilkan catatan ke HTML
+        function renderNotes() {
+            const notesContainer = document.getElementById('notesContainer');
+            const notes = getNotes();
+
+            if (notes.length === 0) {
+                notesContainer.innerHTML = '<p class="empty-msg">Belum ada catatan. Buat catatan pertamamu!</p>';
+                return;
+            }
+
+            notesContainer.innerHTML = '';
+            notes.forEach(note => {
+                const noteCard = document.createElement('div');
+                noteCard.className = 'note-card';
+                noteCard.innerHTML = `
+                    <h3>${escapeHtml(note.title)}</h3>
+                    <p>${escapeHtml(note.content)}</p>
+                    <span class="date">${note.date}</span>
+                    <button class="btn-delete" onclick="deleteNote(${note.id})">Hapus</button>
+                `;
+                notesContainer.appendChild(noteCard);
+            });
+        }
+
+        // Mencegah XSS Attack (Keamanan sederhana)
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Tampilkan catatan saat pertama kali halaman dimuat
+        document.addEventListener('DOMContentLoaded', renderNotes);
+    </script>
 </body>
 </html>
