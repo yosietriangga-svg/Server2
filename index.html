@@ -77,6 +77,26 @@
             background-color: #27ae60;
         }
 
+        .backup-tools {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #eef2f5;
+            border-radius: 6px;
+        }
+
+        .btn-secondary {
+            background-color: #3498db;
+            font-size: 13px;
+            padding: 8px;
+            flex: 1;
+        }
+
+        .btn-secondary:hover {
+            background-color: #2980b9;
+        }
+
         .notes-list {
             display: flex;
             flex-direction: column;
@@ -146,19 +166,52 @@
             <button onclick="addNote()">Tambah Catatan</button>
         </div>
 
+        <!-- Tombol Tambahan Khusus Incognito / Backup -->
+        <div class="backup-tools">
+            <button class="btn-secondary" onclick="exportNotes()">💾 Unduh Catatan (Backup)</button>
+            <button class="btn-secondary" onclick="document.getElementById('importFile').click()">📂 Buka File Catatan</button>
+            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importNotes(event)">
+        </div>
+
         <div class="notes-list" id="notesContainer">
             <!-- Catatan akan muncul di sini -->
         </div>
     </div>
 
     <script>
-        // Fungsi untuk mengambil data dari LocalStorage
-        function getNotes() {
-            const notes = localStorage.getItem('my_notes');
-            return notes ? JSON.parse(notes) : [];
+        // Memori sementara jika LocalStorage diblokir total oleh Incognito
+        let inMemoryNotes = [];
+
+        function isLocalStorageAvailable() {
+            try {
+                const testKey = '__test__';
+                localStorage.setItem(testKey, testKey);
+                localStorage.removeItem(testKey);
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
 
-        // Fungsi untuk menyimpan catatan baru
+        function getNotes() {
+            if (isLocalStorageAvailable()) {
+                const notes = localStorage.getItem('my_notes');
+                return notes ? JSON.parse(notes) : [];
+            }
+            return inMemoryNotes;
+        }
+
+        function saveNotes(notes) {
+            inMemoryNotes = notes;
+            if (isLocalStorageAvailable()) {
+                try {
+                    localStorage.setItem('my_notes', JSON.stringify(notes));
+                } catch (e) {
+                    console.warn('Gagal menyimpan ke LocalStorage:', e);
+                }
+            }
+        }
+
         function addNote() {
             const titleInput = document.getElementById('noteTitle');
             const contentInput = document.getElementById('noteContent');
@@ -185,33 +238,30 @@
             };
 
             const notes = getNotes();
-            notes.unshift(newNote); // Tambahkan ke paling atas
-            localStorage.setItem('my_notes', JSON.stringify(notes));
+            notes.unshift(newNote);
+            saveNotes(notes);
 
-            // Reset form input
             titleInput.value = '';
             contentInput.value = '';
 
             renderNotes();
         }
 
-        // Fungsi untuk menghapus catatan
         function deleteNote(id) {
             if (confirm('Apakah Anda yakin ingin menghapus catatan ini?')) {
                 let notes = getNotes();
                 notes = notes.filter(note => note.id !== id);
-                localStorage.setItem('my_notes', JSON.stringify(notes));
+                saveNotes(notes);
                 renderNotes();
             }
         }
 
-        // Fungsi untuk menampilkan catatan ke HTML
         function renderNotes() {
             const notesContainer = document.getElementById('notesContainer');
             const notes = getNotes();
 
             if (notes.length === 0) {
-                notesContainer.innerHTML = '<p class="empty-msg">Belum ada catatan. Buat catatan pertamamu!</p>';
+                notesContainer.innerHTML = '<p class="empty-msg">Belum ada catatan.</p>';
                 return;
             }
 
@@ -229,7 +279,45 @@
             });
         }
 
-        // Mencegah XSS Attack (Keamanan sederhana)
+        // Fitur Ekspor Data ke File (.json)
+        function exportNotes() {
+            const notes = getNotes();
+            if (notes.length === 0) {
+                alert('Tidak ada catatan untuk diunduh.');
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notes, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `catatan_backup_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        // Fitur Impor Data dari File (.json)
+        function importNotes(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedNotes = JSON.parse(e.target.result);
+                    if (Array.isArray(importedNotes)) {
+                        saveNotes(importedNotes);
+                        renderNotes();
+                        alert('Catatan berhasil dimuat!');
+                    } else {
+                        alert('Format file tidak sesuai.');
+                    }
+                } catch (err) {
+                    alert('Gagal membaca file backup.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
         function escapeHtml(text) {
             return text
                 .replace(/&/g, "&amp;")
@@ -239,7 +327,6 @@
                 .replace(/'/g, "&#039;");
         }
 
-        // Tampilkan catatan saat pertama kali halaman dimuat
         document.addEventListener('DOMContentLoaded', renderNotes);
     </script>
 </body>
