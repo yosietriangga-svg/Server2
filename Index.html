@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Muai">
+<title>Muai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f3f5fb; --surface:#ffffff; --ink:#141826; --muted:#687089;
+    --line:#e1e5f0; --accent:#4558f0; --accent-ink:#ffffff;
+    --user:#e3e8ff; --user-ink:#141826; --code:#0f1424; --code-ink:#e6e9f7;
+    --inline-code:#e9ecf8; --err:#b3261e; --err-bg:#fdecea; --shadow:0 8px 30px rgba(30,40,90,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1017; --surface:#171a24; --ink:#e9ebf5; --muted:#99a0b8;
+      --line:#272b3a; --accent:#7384ff; --accent-ink:#0b0e1d;
+      --user:#252c52; --user-ink:#eef0ff; --code:#0a0c13; --code-ink:#dfe3f5;
+      --inline-code:#262a3b; --err:#ff8a80; --err-bg:#2a1816; --shadow:0 8px 30px rgba(0,0,0,.45);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{background:var(--bg);color:var(--ink);font:16px/1.6 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+  button,input,textarea,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  input,textarea{-webkit-appearance:none;appearance:none}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .app{display:flex;flex-direction:column;width:100%;max-width:780px;height:100%;height:var(--appH,100%);padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+
+  /* Header */
+  header{display:flex;align-items:center;gap:8px;padding:12px 16px}
+  .brand{display:flex;align-items:center;gap:10px;flex:none}
+  .brand svg{width:28px;height:28px;flex:none}
+  .brand h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+  .pill{display:flex;align-items:center;flex:1;min-width:0;max-width:230px;margin-left:auto;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:0 12px;height:36px}
+  .pill input{border:0;background:transparent;width:100%;min-width:0;font-size:.85rem;font-weight:500;outline:none;text-overflow:ellipsis}
+  .pill:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+  .icon-btn{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+  .icon-btn:hover{color:var(--ink)}
+  .icon-btn svg{width:18px;height:18px}
+
+  /* Chat log */
+  #log{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 16px 24px;display:flex;flex-direction:column;gap:22px}
+  .row{display:flex;gap:12px;max-width:100%}
+  .row.me{justify-content:flex-end}
+  .bubble{max-width:82%;background:var(--user);color:var(--user-ink);padding:10px 16px;border-radius:20px 20px 6px 20px;white-space:pre-wrap;word-wrap:break-word}
+  .row.bot .avatar{width:28px;height:28px;flex:none;margin-top:2px}
+  .row.bot .content{min-width:0;flex:1}
+  .body{word-wrap:break-word;overflow-wrap:anywhere}
+  .body > *:first-child{margin-top:0}
+  .body > *:last-child{margin-bottom:0}
+  .body p{margin:0 0 .8em}
+  .body h2,.body h3,.body h4{margin:1.2em 0 .4em;line-height:1.3;letter-spacing:-.01em}
+  .body h2{font-size:1.25rem}.body h3{font-size:1.1rem}.body h4{font-size:1rem}
+  .body ul,.body ol{margin:0 0 .8em;padding-left:1.4em}
+  .body li{margin:.2em 0}
+  .body code{font:.88em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--inline-code);padding:.15em .4em;border-radius:6px}
+  .body pre{margin:.4em 0 1em;background:var(--code);color:var(--code-ink);border-radius:14px;padding:14px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .body pre code{background:none;padding:0;font-size:.85rem;line-height:1.55;color:inherit;white-space:pre}
+  .actions{margin-top:6px;display:flex;gap:4px}
+  .actions button{border:0;background:transparent;color:var(--muted);font-size:.78rem;padding:4px 8px;border-radius:8px}
+  .actions button:hover{background:var(--inline-code);color:var(--ink)}
+
+  .row.err .content{background:var(--err-bg);color:var(--err);border-radius:14px;padding:10px 14px;font-size:.92rem}
+
+  /* Thinking state: the spark spins */
+  .thinking{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.92rem;padding-top:3px}
+  .row.waiting .avatar{animation:spin 1.6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Empty state */
+  .empty{margin:auto;text-align:center;padding:24px 8px;max-width:520px}
+  .empty svg{width:56px;height:56px;margin-bottom:14px}
+  .empty h2{font-size:clamp(1.5rem,5vw,2rem);line-height:1.2;margin:0 0 6px;letter-spacing:-.02em}
+  .empty p{margin:0 0 22px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.88rem}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* Composer */
+  form{padding:8px 16px 16px}
+  .composer{display:flex;align-items:flex-end;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:8px 8px 8px 18px;box-shadow:var(--shadow)}
+  .composer:focus-within{border-color:var(--accent)}
+  textarea{flex:1;resize:none;border:0;background:transparent;outline:none;max-height:160px;padding:8px 0;line-height:1.5}
+  textarea:focus{outline:none}
+  textarea:focus-visible{outline:none}
+  textarea::placeholder{color:var(--muted)}
+  #send{width:40px;height:40px;flex:none;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;transition:transform .15s}
+  #send:hover:not(:disabled){transform:scale(1.06)}
+  #send:disabled{opacity:.4;cursor:default}
+  #send svg{width:18px;height:18px}
+
+  /* API key dialog */
+  dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);padding:22px;width:min(420px,calc(100vw - 32px));box-shadow:var(--shadow)}
+  dialog::backdrop{background:rgba(10,12,24,.5)}
+  dialog h3{margin:0 0 6px}
+  dialog p{margin:0 0 14px;color:var(--muted);font-size:.9rem}
+  dialog input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+  .dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .btn{border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 16px;font-weight:600}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+  @media (max-width:520px){
+    .pill{padding:0 10px}
+    .pill input{font-size:.8rem}
+    .bubble{max-width:90%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .row.waiting .avatar{animation:none}
+    #send{transition:none}
+  }
+  /* iOS Safari zoom otomatis kalau huruf input < 16px */
+  @supports (-webkit-touch-callout:none){
+    .pill input,#keyInput,textarea{font-size:16px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Spark mark, reused via <use> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4285f4"/><stop offset=".55" stop-color="#9b72f2"/><stop offset="1" stop-color="#e4639b"/>
+    </linearGradient>
+    <symbol id="spark" viewBox="0 0 28 28">
+      <path d="M14 0C14.6 7.6 20.4 13.4 28 14C20.4 14.6 14.6 20.4 14 28C13.4 20.4 7.6 14.6 0 14C7.6 13.4 13.4 7.6 14 0Z" fill="url(#g)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg aria-hidden="true"><use href="#spark"/></svg>
+      <h1>Muai</h1>
+    </div>
+    <label class="pill" title="Model">
+      <input id="model" list="models" value="gemini-3.8-flash" aria-label="Model" spellcheck="false" autocapitalize="off" autocorrect="off">
+    </label>
+    <datalist id="models">
+      <option value="gemini-3.8-flash"><option value="gemini-flash-latest"><option value="gemini-flash-lite-latest">
+    </datalist>
+    <button class="icon-btn" id="newChat" type="button" aria-label="Chat baru" title="Chat baru">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+    </button>
+  </header>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="form">
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Tanya apa saja…" aria-label="Pesan"></textarea>
+      <button id="send" type="submit" aria-label="Kirim">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </div>
+  </form>
+</div>
+
+<dialog id="keyDialog">
+  <h3>API key</h3>
+  <p>Key tidak pernah ditampilkan. Kosongkan kolom ini untuk tetap memakai key yang sekarang.</p>
+  <input id="keyInput" type="password" placeholder="Tempel API key" autocomplete="off" spellcheck="false" aria-label="API key">
+  <div class="dlg-actions">
+    <button class="btn" id="keyCancel" type="button">Batal</button>
+    <button class="btn primary" id="keySave" type="button">Simpan</button>
+  </div>
+</dialog>
+
+<script>
+  const FALLBACKS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+  const SUGGESTIONS = ["Jelaskan cara kerja blockchain", "Buatkan rencana belajar Python 2 minggu", "Perbaiki kalimat email saya", "Ide menu makan malam hemat"];
+
+  const log = document.getElementById("log");
+  const form = document.getElementById("form");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+  const modelSel = document.getElementById("model");
+  const keyDialog = document.getElementById("keyDialog");
+  const keyInput = document.getElementById("keyInput");
+  let turns = [];
+
+  /* ---------- Kompatibilitas Safari iOS 15 (iPhone 7) ---------- */
+  function submitForm(){
+    // requestSubmit() belum ada di Safari iOS 15
+    if (form.requestSubmit) form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  }
+  function openDlg(){ if (keyDialog.showModal) keyDialog.showModal(); else keyDialog.setAttribute("open", ""); }
+  function closeDlg(){ if (keyDialog.close) keyDialog.close(); else keyDialog.removeAttribute("open"); }
+  function legacyCopy(t){
+    return new Promise((res, rej) => {
+      const ta = document.createElement("textarea");
+      ta.value = t; ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+      let ok = false; try { ok = document.execCommand("copy"); } catch(e){}
+      ta.remove(); ok ? res() : rej();
+    });
+  }
+  function copyText(t){
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).catch(() => legacyCopy(t));
+    return legacyCopy(t);
+  }
+
+  /* ---------- API key ---------- */
+  const _k = "d0xzNEctYUtIbXdDNjVSVTZSQlg2Zm1tSHlVWmhwWVBESzVkenhsWEdlZ0o2TlI4YkEuUUE=";
+  const DEFAULT_KEY = (() => { try { return atob(_k).split("").reverse().join(""); } catch(e){ return ""; } })();
+  function getKey(){ try { return localStorage.getItem("gemini_key") || DEFAULT_KEY; } catch(e){ return DEFAULT_KEY; } }
+  function setKey(k){ try { localStorage.setItem("gemini_key", k); } catch(e){} }
+  function askKey(){ keyInput.value = ""; keyInput.placeholder = getKey() ? "•••••••• (sudah tersimpan)" : "Tempel API key"; openDlg(); keyInput.focus(); }
+  document.getElementById("keyCancel").onclick = () => closeDlg();
+  document.getElementById("keySave").onclick = () => { if (keyInput.value.trim()) setKey(keyInput.value.trim()); closeDlg(); loadModels(); };
+
+  function loadModels(){
+    const key = getKey(); if (!key) return;
+    fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", { headers: { "x-goog-api-key": key } })
+      .then(r => r.json())
+      .then(d => {
+        const dl = document.getElementById("models");
+        (d.models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+          .forEach(m => { const o = document.createElement("option"); o.value = m.name.replace("models/", ""); dl.appendChild(o); });
+      }).catch(() => {});
+  }
+  loadModels();
+
+  /* ---------- Markdown ringan (aman: semua di-escape dulu) ---------- */
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  function inline(s){
+    return esc(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+  }
+  function md(src){
+    const blocks = [];
+    src = src.replace(/```[^\n]*\n?([\s\S]*?)```/g, (m, c) => {
+      blocks.push("<pre><code>" + esc(c.replace(/\n$/, "")) + "</code></pre>");
+      return "\u0000" + (blocks.length - 1) + "\u0000";
+    });
+    const out = []; let para = [], list = null;
+    const flushPara = () => { if (para.length){ out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
+    const flushList = () => { if (list){ out.push("<" + list.t + ">" + list.items.map(i => "<li>" + inline(i) + "</li>").join("") + "</" + list.t + ">"); list = null; } };
+    for (const line of src.split("\n")){
+      let m;
+      if ((m = line.match(/^\u0000(\d+)\u0000$/))){ flushPara(); flushList(); out.push(blocks[+m[1]]); }
+      else if (/^\s*$/.test(line)){ flushPara(); flushList(); }
+      else if ((m = line.match(/^(#{1,4})\s+(.*)/))){ flushPara(); flushList(); const n = Math.min(4, m[1].length + 1); out.push("<h" + n + ">" + inline(m[2]) + "</h" + n + ">"); }
+      else if ((m = line.match(/^\s*[-*•]\s+(.*)/))){ flushPara(); if (!list || list.t !== "ul"){ flushList(); list = { t:"ul", items:[] }; } list.items.push(m[1]); }
+      else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))){ flushPara(); if (!list || list.t !== "ol"){ flushList(); list = { t:"ol", items:[] }; } list.items.push(m[1]); }
+      else { flushList(); para.push(line); }
+    }
+    flushPara(); flushList();
+    return out.join("");
+  }
+
+  /* ---------- UI ---------- */
+  function showEmpty(){
+    log.innerHTML = "";
+    const d = document.createElement("div");
+    d.className = "empty"; d.id = "empty";
+    d.innerHTML = '<svg aria-hidden="true"><use href="#spark"/></svg><h2>Mau bahas apa hari ini?</h2><p>Tulis pertanyaan, atau mulai dari salah satu ini.</p><div class="chips"></div>';
+    const chips = d.querySelector(".chips");
+    SUGGESTIONS.forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = t;
+      b.onclick = () => { input.value = t; submitForm(); };
+      chips.appendChild(b);
+    });
+    log.appendChild(d);
+  }
+  function clearEmpty(){ const e = document.getElementById("empty"); if (e) e.remove(); }
+  function scrollDown(){ log.scrollTop = log.scrollHeight; }
+
+  function addUser(text){
+    clearEmpty();
+    const r = document.createElement("div");
+    r.className = "row me";
+    const b = document.createElement("div");
+    b.className = "bubble"; b.textContent = text;
+    r.appendChild(b); log.appendChild(r); scrollDown();
+  }
+  function addBot(){
+    clearEmpty();
+    const r = document.createElement("div");
+    r.className = "row bot waiting";
+    r.innerHTML = '<svg class="avatar" aria-hidden="true"><use href="#spark"/></svg><div class="content"><div class="body"><div class="thinking"><span class="status">Berpikir…</span></div></div></div>';
+    log.appendChild(r); scrollDown();
+    return r;
+  }
+  function setStatus(row, text){ const s = row.querySelector(".status"); if (s) s.textContent = text; }
+  function setReply(row, text){
+    row.classList.remove("waiting");
+    row.querySelector(".body").innerHTML = md(text);
+    const a = document.createElement("div");
+    a.className = "actions";
+    const c = document.createElement("button");
+    c.type = "button"; c.textContent = "Salin";
+    c.onclick = () => { copyText(text).then(() => { c.textContent = "Tersalin"; setTimeout(() => c.textContent = "Salin", 1500); }).catch(() => {}); };
+    a.appendChild(c);
+    row.querySelector(".content").appendChild(a);
+    scrollDown();
+  }
+  function setError(row, text){
+    row.classList.remove("waiting", "bot"); row.classList.add("err");
+    row.querySelector(".content").textContent = text;
+    row.querySelector(".avatar").remove();
+  }
+
+  document.getElementById("newChat").onclick = () => { turns = []; showEmpty(); input.focus(); };
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); submitForm(); }
+  });
+
+  /* ---------- Kirim pesan ---------- */
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    const API_KEY = getKey();
+    if (!API_KEY){ askKey(); return; }
+
+    input.value = ""; input.style.height = "auto";
+    addUser(text);
+    turns.push({ role: "user", parts: [{ text }] });
+
+    const wait = addBot();
+    send.disabled = true;
+
+    try {
+      const base = "https://generativelanguage.googleapis.com/v1beta/models/";
+      const chosen = modelSel.value.trim();
+      const queue = [chosen, ...FALLBACKS.filter(m => m !== chosen)];
+      let res, data, used = chosen;
+      outer:
+      for (const m of queue) {
+        used = m;
+        for (let i = 0; i < 2; i++) {
+          res = await fetch(base + m + ":generateContent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": API_KEY },
+            body: JSON.stringify({ contents: turns })
+          });
+          data = await res.json();
+          if (res.ok) break outer;
+          if (![404, 429, 500, 503].includes(res.status)) break outer;
+          if (res.status === 404) break;
+          setStatus(wait, m + " sibuk, mencoba lagi…");
+          await new Promise(r => setTimeout(r, 1500));
+        }
+        setStatus(wait, "Mencoba model lain…");
+      }
+      if (!res.ok) throw new Error(data?.error?.message || ("HTTP " + res.status));
+      if (used !== chosen) modelSel.value = used;
+      const reply = data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "(Tidak ada balasan)";
+      setReply(wait, reply);
+      turns.push({ role: "model", parts: [{ text: reply }] });
+    } catch (err) {
+      turns.pop();
+      setError(wait, "Gagal: " + err.message);
+    } finally {
+      send.disabled = false;
+      scrollDown();
+      input.focus();
+    }
+  });
+
+  // Keyboard iOS: tinggi aplikasi mengikuti area yang benar-benar terlihat
+  (function(){
+    const app = document.querySelector(".app");
+    const vv = window.visualViewport;
+    function fit(scroll){
+      const h = vv ? vv.height : window.innerHeight;
+      document.documentElement.style.setProperty("--appH", h + "px");
+      app.style.transform = (vv && vv.offsetTop) ? "translateY(" + vv.offsetTop + "px)" : "";
+      if (scroll) scrollDown();
+    }
+    if (vv){
+      vv.addEventListener("resize", () => fit(true));
+      vv.addEventListener("scroll", () => fit(false));
+    } else {
+      window.addEventL
